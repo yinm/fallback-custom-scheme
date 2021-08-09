@@ -17,9 +17,9 @@
         // iPhone端末ならアプリを開くかApp Storeを開く。
         if (userAgent.search(/iphone|ipad|ipod/) > -1) {
           location.href = customUrlScheme;
-          setTimeout(function () {
-            location.href = iosStoreUrl;
-          }, 500);
+          // setTimeout(function () {
+          //   location.href = iosStoreUrl;
+          // }, 500);
         }
         // Android端末ならアプリを開くかGoogle Playを開く。
         else if (userAgent.search(/android/) > -1) {
