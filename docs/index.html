@@ -18,9 +18,6 @@
         if (userAgent.search(/iphone|ipad|ipod/) > -1) {
           location.href = customUrlScheme;
           setTimeout(function () {
-            alert(
-              "アプリがインストールされていないようでした。インストール後に再度お試しください"
-            );
             location.href = iosStoreUrl;
           }, 500);
         }
