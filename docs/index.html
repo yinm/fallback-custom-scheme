@@ -9,7 +9,7 @@
       // アプリを開く。アプリがインストールされていなければサイトを開く。
       function launchApp() {
         const customUrlScheme = "twitter://user?screen_name=TwitterJP";
-        // var IOS_STORE = "itms-apps://itunes.apple.com/app/id333903271";
+        const iosStoreUrl = "itms-apps://itunes.apple.com/app/id333903271";
         const androidStoreUrl =
           "https://play.google.com/store/apps/details?id=com.twitter.android";
 
@@ -17,9 +17,12 @@
         // iPhone端末ならアプリを開くかApp Storeを開く。
         if (userAgent.search(/iphone|ipad|ipod/) > -1) {
           location.href = customUrlScheme;
-          // setTimeout(function () {
-          //   location.href = IOS_STORE;
-          // }, 500);
+          setTimeout(function () {
+            alert(
+              "アプリがインストールされていないようでした。インストール後に再度お試しください"
+            );
+            location.href = iosStoreUrl;
+          }, 500);
         }
         // Android端末ならアプリを開くかGoogle Playを開く。
         else if (userAgent.search(/android/) > -1) {
