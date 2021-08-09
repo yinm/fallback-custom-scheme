@@ -1,9 +1,9 @@
-import util from '../util';
-import BrowserBackgroundObserver from './BrowserBackgroundObserver';
+import util from "../util";
+import BrowserBackgroundObserver from "./BrowserBackgroundObserver";
 
 class BaseLauncher {
   _context = null;
-  _fallbackTime = 500;
+  _fallbackTime = 5000;
   _timerId;
   _observer;
 
@@ -21,7 +21,8 @@ class BaseLauncher {
     this._observer = new BrowserBackgroundObserver(
       this._handleBrowserBack,
       this._handleLeaveBrowser,
-      true);
+      true
+    );
   }
 
   _handleTimeout() {

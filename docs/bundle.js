@@ -4,6 +4,125 @@
 	(global.FallbackCustomScheme = factory());
 }(this, (function () { 'use strict';
 
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
+  return typeof obj;
+} : function (obj) {
+  return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
+};
+
+var asyncGenerator = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function (fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function (value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
 var classCallCheck = function (instance, Constructor) {
   if (!(instance instanceof Constructor)) {
     throw new TypeError("Cannot call a class as a function");
@@ -98,9 +217,16 @@ var __moduleExports = createCommonjsModule(function (module) {
 });
 
 var __moduleExports$1 = createCommonjsModule(function (module) {
+	/*
+ object-assign
+ (c) Sindre Sorhus
+ @license MIT
+ */
+
 	'use strict';
 	/* eslint-disable no-unused-vars */
 
+	var getOwnPropertySymbols = Object.getOwnPropertySymbols;
 	var hasOwnProperty = Object.prototype.hasOwnProperty;
 	var propIsEnumerable = Object.prototype.propertyIsEnumerable;
 
@@ -121,7 +247,7 @@ var __moduleExports$1 = createCommonjsModule(function (module) {
 			// Detect buggy property enumeration order in older V8 versions.
 
 			// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-			var test1 = new String('abc'); // eslint-disable-line
+			var test1 = new String('abc'); // eslint-disable-line no-new-wrappers
 			test1[5] = 'de';
 			if (Object.getOwnPropertyNames(test1)[0] === '5') {
 				return false;
@@ -149,7 +275,7 @@ var __moduleExports$1 = createCommonjsModule(function (module) {
 			}
 
 			return true;
-		} catch (e) {
+		} catch (err) {
 			// We don't expect any of the above to throw, but better to be safe.
 			return false;
 		}
@@ -169,8 +295,8 @@ var __moduleExports$1 = createCommonjsModule(function (module) {
 				}
 			}
 
-			if (Object.getOwnPropertySymbols) {
-				symbols = Object.getOwnPropertySymbols(from);
+			if (getOwnPropertySymbols) {
+				symbols = getOwnPropertySymbols(from);
 				for (var i = 0; i < symbols.length; i++) {
 					if (propIsEnumerable.call(from, symbols[i])) {
 						to[symbols[i]] = from[symbols[i]];
@@ -189,6 +315,75 @@ var index = createCommonjsModule(function (module, exports) {
 	var strictUriEncode = __moduleExports;
 	var objectAssign = __moduleExports$1;
 
+	function encoderForArrayFormat(opts) {
+		switch (opts.arrayFormat) {
+			case 'index':
+				return function (key, value, index) {
+					return value === null ? [encode(key, opts), '[', index, ']'].join('') : [encode(key, opts), '[', encode(index, opts), ']=', encode(value, opts)].join('');
+				};
+
+			case 'bracket':
+				return function (key, value) {
+					return value === null ? encode(key, opts) : [encode(key, opts), '[]=', encode(value, opts)].join('');
+				};
+
+			default:
+				return function (key, value) {
+					return value === null ? encode(key, opts) : [encode(key, opts), '=', encode(value, opts)].join('');
+				};
+		}
+	}
+
+	function parserForArrayFormat(opts) {
+		var result;
+
+		switch (opts.arrayFormat) {
+			case 'index':
+				return function (key, value, accumulator) {
+					result = /\[(\d*)\]$/.exec(key);
+
+					key = key.replace(/\[\d*\]$/, '');
+
+					if (!result) {
+						accumulator[key] = value;
+						return;
+					}
+
+					if (accumulator[key] === undefined) {
+						accumulator[key] = {};
+					}
+
+					accumulator[key][result[1]] = value;
+				};
+
+			case 'bracket':
+				return function (key, value, accumulator) {
+					result = /(\[\])$/.exec(key);
+					key = key.replace(/\[\]$/, '');
+
+					if (!result) {
+						accumulator[key] = value;
+						return;
+					} else if (accumulator[key] === undefined) {
+						accumulator[key] = [value];
+						return;
+					}
+
+					accumulator[key] = [].concat(accumulator[key], value);
+				};
+
+			default:
+				return function (key, value, accumulator) {
+					if (accumulator[key] === undefined) {
+						accumulator[key] = value;
+						return;
+					}
+
+					accumulator[key] = [].concat(accumulator[key], value);
+				};
+		}
+	}
+
 	function encode(value, opts) {
 		if (opts.encode) {
 			return opts.strict ? strictUriEncode(value) : encodeURIComponent(value);
@@ -197,11 +392,29 @@ var index = createCommonjsModule(function (module, exports) {
 		return value;
 	}
 
+	function keysSorter(input) {
+		if (Array.isArray(input)) {
+			return input.sort();
+		} else if ((typeof input === 'undefined' ? 'undefined' : _typeof(input)) === 'object') {
+			return keysSorter(Object.keys(input)).sort(function (a, b) {
+				return Number(a) - Number(b);
+			}).map(function (key) {
+				return input[key];
+			});
+		}
+
+		return input;
+	}
+
 	exports.extract = function (str) {
 		return str.split('?')[1] || '';
 	};
 
-	exports.parse = function (str) {
+	exports.parse = function (str, opts) {
+		opts = objectAssign({ arrayFormat: 'none' }, opts);
+
+		var formatter = parserForArrayFormat(opts);
+
 		// Create an object with no prototype
 		// https://github.com/sindresorhus/query-string/issues/47
 		var ret = Object.create(null);
@@ -223,31 +436,36 @@ var index = createCommonjsModule(function (module, exports) {
 			var key = parts.shift();
 			var val = parts.length > 0 ? parts.join('=') : undefined;
 
-			key = decodeURIComponent(key);
-
 			// missing `=` should be `null`:
 			// http://w3.org/TR/2012/WD-url-20120524/#collect-url-parameters
 			val = val === undefined ? null : decodeURIComponent(val);
 
-			if (ret[key] === undefined) {
-				ret[key] = val;
-			} else if (Array.isArray(ret[key])) {
-				ret[key].push(val);
-			} else {
-				ret[key] = [ret[key], val];
-			}
+			formatter(decodeURIComponent(key), val, ret);
 		});
 
-		return ret;
+		return Object.keys(ret).sort().reduce(function (result, key) {
+			var val = ret[key];
+			if (Boolean(val) && (typeof val === 'undefined' ? 'undefined' : _typeof(val)) === 'object' && !Array.isArray(val)) {
+				// Sort object keys, not values
+				result[key] = keysSorter(val);
+			} else {
+				result[key] = val;
+			}
+
+			return result;
+		}, Object.create(null));
 	};
 
 	exports.stringify = function (obj, opts) {
 		var defaults = {
 			encode: true,
-			strict: true
+			strict: true,
+			arrayFormat: 'none'
 		};
 
 		opts = objectAssign(defaults, opts);
+
+		var formatter = encoderForArrayFormat(opts);
 
 		return obj ? Object.keys(obj).sort().map(function (key) {
 			var val = obj[key];
@@ -268,11 +486,7 @@ var index = createCommonjsModule(function (module, exports) {
 						return;
 					}
 
-					if (val2 === null) {
-						result.push(encode(key, opts));
-					} else {
-						result.push(encode(key, opts) + '=' + encode(val2, opts));
-					}
+					result.push(formatter(key, val2, result.length));
 				});
 
 				return result.join('&');
@@ -331,8 +545,8 @@ var Context = function () {
   }, {
     key: 'urlScheme',
     get: function get() {
-      var query = this.query;
-      var _urlScheme = this._urlScheme;
+      var query = this.query,
+          _urlScheme = this._urlScheme;
 
       var fullPath = _urlScheme;
       if (query) {
@@ -351,8 +565,6 @@ var Context = function () {
 var _window = window;
 var document$1 = _window.document;
 var location$1 = _window.location;
-
-
 var openURLByIFrame = function openURLByIFrame(url) {
   var iframe = document$1.createElement('iframe');
   iframe.src = url;
@@ -428,32 +640,30 @@ var BrowserBackgroundObserver = function () {
     }
 
     if (useRequestAnimationFrame) {
-      (function () {
-        var observe = function observe() {
-          _this.rafId = window.requestAnimationFrame(observe);
-          if (_this.rafTimer !== false) {
-            clearTimeout(_this.rafTimer);
+      var observe = function observe() {
+        _this.rafId = window.requestAnimationFrame(observe);
+        if (_this.rafTimer !== false) {
+          clearTimeout(_this.rafTimer);
+        }
+
+        _this.rafTimer = setTimeout(function () {
+          if (!isReturnBrowser) {
+            _onReturn();
           }
 
-          _this.rafTimer = setTimeout(function () {
-            if (!isReturnBrowser) {
-              _onReturn();
-            }
+          window.cancelAnimationFrame(_this.rafId);
+        }, 1000);
+      };
 
-            window.cancelAnimationFrame(_this.rafId);
-          }, 1000);
-        };
-
-        observe();
-      })();
+      observe();
     }
   }
 
   createClass(BrowserBackgroundObserver, [{
     key: '_onReturn',
     value: function _onReturn() {
-      var rafTimer = this.rafTimer;
-      var rafId = this.rafId;
+      var rafTimer = this.rafTimer,
+          rafId = this.rafId;
 
       this.isReturnBrowser = true;
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
@@ -493,8 +703,8 @@ var BrowserBackgroundObserver = function () {
   }, {
     key: '_onVisibilityChange',
     value: function _onVisibilityChange() {
-      var isLeaveBrowser = this.isLeaveBrowser;
-      var isReturnBrowser = this.isReturnBrowser;
+      var isLeaveBrowser = this.isLeaveBrowser,
+          isReturnBrowser = this.isReturnBrowser;
 
       if (!isLeaveBrowser && document.hidden) {
         this._onLeave();
@@ -505,8 +715,8 @@ var BrowserBackgroundObserver = function () {
   }, {
     key: '_onWebkitVisibilityChange',
     value: function _onWebkitVisibilityChange() {
-      var isLeaveBrowser = this.isLeaveBrowser;
-      var isReturnBrowser = this.isReturnBrowser;
+      var isLeaveBrowser = this.isLeaveBrowser,
+          isReturnBrowser = this.isReturnBrowser;
 
       if (!isLeaveBrowser && document.webkitHidden) {
         this._onLeave();
@@ -522,7 +732,7 @@ var BaseLauncher = function () {
   function BaseLauncher(context) {
     classCallCheck(this, BaseLauncher);
     this._context = null;
-    this._fallbackTime = 500;
+    this._fallbackTime = 5000;
 
     this._context = context;
 
@@ -532,26 +742,26 @@ var BaseLauncher = function () {
   }
 
   createClass(BaseLauncher, [{
-    key: 'launch',
+    key: "launch",
     value: function launch() {
       util$1.openURLByIFrame(this._context.urlScheme);
       this._timerId = setTimeout(this._handleTimeout, this._fallbackTime);
       this._observer = new BrowserBackgroundObserver(this._handleBrowserBack, this._handleLeaveBrowser, true);
     }
   }, {
-    key: '_handleTimeout',
+    key: "_handleTimeout",
     value: function _handleTimeout() {
       this._context.handleFallback();
     }
   }, {
-    key: '_handleLeaveBrowser',
+    key: "_handleLeaveBrowser",
     value: function _handleLeaveBrowser() {
       var _timerId = this._timerId;
 
       clearTimeout(_timerId);
     }
   }, {
-    key: '_handleBrowserBack',
+    key: "_handleBrowserBack",
     value: function _handleBrowserBack() {
       this._context.handleBrowserBack();
     }
@@ -652,14 +862,14 @@ var FallbackCustomScheme = function () {
   createClass(FallbackCustomScheme, [{
     key: 'launch',
     value: function launch(options) {
-      var _context = this._context;
-      var _ua = this._ua;
+      var _context = this._context,
+          _ua = this._ua;
 
       options && _context.extend(options);
       var urlScheme = _context.urlScheme;
-      var isIOS = _ua.isIOS;
-      var isAndroid = _ua.isAndroid;
-      var isPC = _ua.isPC;
+      var isIOS = _ua.isIOS,
+          isAndroid = _ua.isAndroid,
+          isPC = _ua.isPC;
 
 
       if (!urlScheme) {
